@@ -1,32 +1,31 @@
-name: UT Bot Background Monitor
+name: Trading Bot
 
 on:
-  schedule:
-    # Monday to Friday, Har 5 minute me chalega (IST Market hours)
-    - cron: '*/5 3-10 * * 1-5'
   workflow_dispatch:
+  schedule:
+    - cron: '*/5 9-15 * * 1-5' # Mon-Fri every 5 mins
 
 jobs:
   run-bot:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v3
+  runs-on: ubuntu-latest
+  steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests pandas
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests pandas numpy dhanhq
 
-      - name: Run Trading Bot Script
-        env:
-          DHAN_CLIENT_ID: ${{ secrets.DHAN_CLIENT_ID }}
-          DHAN_ACCESS_TOKEN: ${{ secrets.DHAN_ACCESS_TOKEN }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python bot_cron.py
+    - name: Run Trading Bot
+      env:
+        DHAN_CLIENT_ID: ${{ secrets.DHAN_CLIENT_ID }}
+        DHAN_ACCESS_TOKEN: ${{ secrets.DHAN_ACCESS_TOKEN }}
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      run: python bot_cron.py
