@@ -16,8 +16,8 @@ except Exception:
     access_token = os.environ.get("DHAN_ACCESS_TOKEN")
 
 def fetch_index_price(security_id, client_id, access_token):
-    # Dhan official production API endpoint check
-    url = "https://api.co.dhan.co/charts/intraday"
+    # Dhan Correct Production API Domain
+    url = "https://api.dhan.co/charts/intraday"
     headers = {
         "access-token": access_token,
         "client-id": client_id,
@@ -39,7 +39,7 @@ def fetch_index_price(security_id, client_id, access_token):
                 if not df.empty and 'close' in df.columns:
                     return float(df['close'].iloc[-1])
         else:
-            st.warning(f"API status code: {response.status_code}")
+            st.warning(f"API Response Code: {response.status_code}")
     except requests.exceptions.RequestException as e:
         st.error(f"Network error: {e}")
     except Exception as e:
