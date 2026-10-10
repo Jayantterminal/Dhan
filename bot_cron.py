@@ -13,12 +13,18 @@ DHAN_ACCESS_TOKEN = os.environ.get("DHAN_ACCESS_TOKEN")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-dhan = dhanhq(DHAN_CLIENT_ID, DHAN_ACCESS_TOKEN)
+# Initialize Dhan API safely
+dhan = None
+if DHAN_CLIENT_ID and DHAN_ACCESS_TOKEN:
+    try:
+        dhan = dhanhq(DHAN_CLIENT_ID, DHAN_ACCESS_TOKEN)
+    except Exception as e:
+        print(f"Dhan Initialization Error: {e}")
 
 KEY_VALUE = 3
 ATR_PERIOD = 10
-MAX_CAPITAL = 10000  # Max limit per trade
-SELECTED_SYMBOL = "NIFTY"  # Change to "SENSEX" if needed
+MAX_CAPITAL = 10000  # ₹10,000 limit
+SELECTED_SYMBOL = "NIFTY"
 
 def get_symbol_config(symbol):
     if symbol == "SENSEX":
@@ -50,6 +56,9 @@ def send_telegram_alert(msg):
             print(f"Telegram Error: {e}")
 
 def get_market_data(config):
+    if not dhan:
+        print("Dhan client not initialized.")
+        return None
     try:
         response = dhan.intraday_daily_data(
             security_id=config["security_id"],
@@ -100,81 +109,22 @@ def calculate_ut_bot(df):
     
     return buy_signal.iloc[-1], sell_signal.iloc[-1], src.iloc[-1]
 
-def execute_order(option_security_id, transaction_type, symbol_name, quantity):
-    now = datetime.datetime.now().strftime("%H:%M:%S")
-    t_type = dhan.BUY if transaction_type == "BUY" else dhan.SELL
-    
-    try:
-        response = dhan.place_order(
-            tag='UT_BOT_CRON',
-            transaction_type=t_type,
-            exchange_segment=dhan.NSE_FNO,
-            product_type=dhan.MARGIN,
-            order_type=dhan.MARKET,
-            validity=dhan.DAY,
-            security_id=str(option_security_id),
-            quantity=int(quantity),
-            price=0
-        )
-        
-        print(f"Order Response: {response}")
-        status = response.get('status', '')
-        data_resp = response.get('data', {}) if isinstance(response.get('data'), dict) else {}
-        order_id = data_resp.get('orderId', 'N/A')
-        remarks = response.get('remarks', response.get('message', 'No message'))
-
-        if status == 'success':
-            msg = (
-                f"🚀 *AUTOMATIC ORDER PLACED*\n\n"
-                f"📊 *Symbol*: {symbol_name}\n"
-                f"🔄 *Type*: {transaction_type}\n"
-                f"📦 *Quantity*: {quantity}\n"
-                f"🆔 *Order ID*: `{order_id}`\n"
-                f"⏰ *Time*: {now}"
-            )
-            send_telegram_alert(msg)
-        else:
-            msg = (
-                f"⚠️ *ORDER REJECTED*\n\n"
-                f"📊 *Symbol*: {symbol_name}\n"
-                f"❌ *Reason*: {remarks}\n"
-                f"⏰ *Time*: {now}"
-            )
-            send_telegram_alert(msg)
-
-    except Exception as e:
-        error_msg = f"❌ *EXECUTION ERROR*: `{str(e)}` at {now}"
-        send_telegram_alert(error_msg)
-
 def main():
     config = get_symbol_config(SELECTED_SYMBOL)
     df = get_market_data(config)
     
+    now = datetime.datetime.now().strftime("%H:%M:%S")
+    
     if df is None or df.empty:
-        print(f"{config['name']} data unavailable.")
+        print(f"[{now}] Market closed or Data unavailable for {config['name']}.")
         return
         
     buy, sell, current_price = calculate_ut_bot(df)
-    now = datetime.datetime.now().strftime("%H:%M:%S")
     
     diff = config["strike_diff"]
     atm_strike = int(round(current_price / diff) * diff)
     
-    print(f"[{now}] {config['name']} Spot: {current_price} | ATM Calculated: {atm_strike} | Buy: {buy} | Sell: {sell}")
-    
-    if buy:
-        print(f"Signal: BUY Triggered! Evaluating ATM CE for strike {atm_strike}")
-        # Option ka live LTP fetch karke quantity calculate karne ka logic yahan integrate hoga
-        # Placeholder quantity mapping based on 10k budget
-        option_security_id = "YOUR_DYNAMIC_CE_ID" 
-        calculated_qty = config["lot_size"] # Expiry/Budget adjustment ke sath
-        execute_order(option_security_id, "BUY", f"{SELECTED_SYMBOL} {atm_strike} CE", calculated_qty)
-        
-    elif sell:
-        print(f"Signal: SELL Triggered! Evaluating ATM PE for strike {atm_strike}")
-        option_security_id = "YOUR_DYNAMIC_PE_ID"
-        calculated_qty = config["lot_size"]
-        execute_order(option_security_id, "BUY", f"{SELECTED_SYMBOL} {atm_strike} PE", calculated_qty)
+    print(f"[{now}] {config['name']} Spot: {current_price} | ATM: {atm_strike} | Buy: {buy} | Sell: {sell}")
 
 if __name__ == "__main__":
     main()
