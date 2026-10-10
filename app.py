@@ -16,11 +16,13 @@ except Exception:
     access_token = os.environ.get("DHAN_ACCESS_TOKEN")
 
 def fetch_index_price(security_id, client_id, access_token):
+    # Dhan official production API endpoint check
     url = "https://api.co.dhan.co/charts/intraday"
     headers = {
         "access-token": access_token,
         "client-id": client_id,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept": "application/json"
     }
     payload = {
         "security_id": security_id,
@@ -28,17 +30,18 @@ def fetch_index_price(security_id, client_id, access_token):
         "instrument_type": "INDEX"
     }
     try:
-        response = requests.post(url, json=payload, headers=headers)
-        res_json = response.json()
-        
-        # Debug info dikhane ke liye
-        st.write(f"API Response ({security_id}):", res_json)
-        
-        if res_json.get("status") == "success":
-            data = res_json.get("data", {})
-            df = pd.DataFrame(data)
-            if not df.empty and 'close' in df.columns:
-                return float(df['close'].iloc[-1])
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        if response.status_code == 200:
+            res_json = response.json()
+            if res_json.get("status") == "success":
+                data = res_json.get("data", {})
+                df = pd.DataFrame(data)
+                if not df.empty and 'close' in df.columns:
+                    return float(df['close'].iloc[-1])
+        else:
+            st.warning(f"API status code: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        st.error(f"Network error: {e}")
     except Exception as e:
         st.error(f"Error: {e}")
     return None
@@ -60,7 +63,7 @@ if st.button("🔄 Check Nifty & Sensex Live Price", type="primary"):
                     st.metric(label="Nifty Price", value=nifty_price)
                     st.info(f"ATM: {nifty_atm} CE/PE")
                 else:
-                    st.warning("Market band hone ki wajah se data nahi mila.")
+                    st.warning("Data fetch nahi ho saka (Market closed ya network issue).")
             
             with col2:
                 st.subheader("📊 Sensex Spot")
@@ -69,4 +72,4 @@ if st.button("🔄 Check Nifty & Sensex Live Price", type="primary"):
                     st.metric(label="Sensex Price", value=sensex_price)
                     st.info(f"ATM: {sensex_atm} CE/PE")
                 else:
-                    st.warning("Market band hone ki wajah se data nahi mila.")
+                    st.warning("Data fetch nahi ho saka (Market closed ya network issue).")
