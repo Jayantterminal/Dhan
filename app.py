@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from dhanhq import DhanContext, dhanhq
+import requests
 import os
 
 st.set_page_config(page_title="Nifty & Sensex Live Checker", page_icon="📈", layout="centered")
@@ -15,60 +15,56 @@ except Exception:
     client_id = os.environ.get("DHAN_CLIENT_ID")
     access_token = os.environ.get("DHAN_ACCESS_TOKEN")
 
+def fetch_index_price(security_id, client_id, access_token):
+    url = "https://api.co.dhan.co/charts/intraday"
+    headers = {
+        "access-token": access_token,
+        "client-id": client_id,
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "security_id": security_id,
+        "exchange_segment": "IDX_I",
+        "instrument_type": "INDEX"
+    }
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        res_json = response.json()
+        if res_json.get("status") == "success":
+            data = res_json.get("data", {})
+            df = pd.DataFrame(data)
+            if not df.empty and 'close' in df.columns:
+                return float(df['close'].iloc[-1])
+    except Exception as e:
+        pass
+    return None
+
 if st.button("🔄 Check Nifty & Sensex Live Price", type="primary"):
     if not client_id or not access_token:
         st.error("Secrets missing in Streamlit!")
     else:
-        try:
-            with st.spinner("Fetching market data from Dhan..."):
-                dhan_context = DhanContext(client_id, access_token)
-                dhan = dhanhq(dhan_context)
-                
-                # 1. Fetch Nifty (ID: 13)
-                nifty_resp = dhan.intraday_daily_charts(
-                    security_id="13",
-                    exchange_segment="IDX_I",
-                    instrument_type="INDEX"
-                )
-                
-                # 2. Fetch Sensex (ID: 51)
-                sensex_resp = dhan.intraday_daily_charts(
-                    security_id="51",
-                    exchange_segment="IDX_I",
-                    instrument_type="INDEX"
-                )
-                
-                col1, col2 = st.columns(2)
-                
-                # Display Nifty
-                with col1:
-                    st.subheader("📊 Nifty Spot")
-                    if nifty_resp.get("status") == "success":
-                        df_nifty = pd.DataFrame(nifty_resp.get("data", {}))
-                        if not df_nifty.empty:
-                            nifty_price = float(df_nifty['close'].iloc[-1])
-                            nifty_atm = int(round(nifty_price / 50) * 50)
-                            st.metric(label="Nifty Price", value=nifty_price)
-                            st.info(f"ATM: {nifty_atm} CE/PE")
-                        else:
-                            st.warning("Nifty data empty")
-                    else:
-                        st.error("Nifty Error")
-                
-                # Display Sensex
-                with col2:
-                    st.subheader("📊 Sensex Spot")
-                    if sensex_resp.get("status") == "success":
-                        df_sensex = pd.DataFrame(sensex_resp.get("data", {}))
-                        if not df_sensex.empty:
-                            sensex_price = float(df_sensex['close'].iloc[-1])
-                            sensex_atm = int(round(sensex_price / 100) * 100)
-                            st.metric(label="Sensex Price", value=sensex_price)
-                            st.info(f"ATM: {sensex_atm} CE/PE")
-                        else:
-                            st.warning("Sensex data empty")
-                    else:
-                        st.error("Sensex Error")
-                        
-        except Exception as e:
-            st.error(f"Exception: {e}")
+        with st.spinner("Fetching market data directly from Dhan API..."):
+            # Nifty (ID: 13)
+            nifty_price = fetch_index_price("13", client_id, access_token)
+            # Sensex (ID: 51)
+            sensex_price = fetch_index_price("51", client_id, access_token)
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("📊 Nifty Spot")
+                if nifty_price:
+                    nifty_atm = int(round(nifty_price / 50) * 50)
+                    st.metric(label="Nifty Price", value=nifty_price)
+                    st.info(f"ATM: {nifty_atm} CE/PE")
+                else:
+                    st.error("Could not fetch Nifty data")
+            
+            with col2:
+                st.subheader("📊 Sensex Spot")
+                if sensex_price:
+                    sensex_atm = int(round(sensex_price / 100) * 100)
+                    st.metric(label="Sensex Price", value=sensex_price)
+                    st.info(f"ATM: {sensex_atm} CE/PE")
+                else:
+                    st.error("Could not fetch Sensex data")
