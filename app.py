@@ -30,23 +30,25 @@ def fetch_index_price(security_id, client_id, access_token):
     try:
         response = requests.post(url, json=payload, headers=headers)
         res_json = response.json()
+        
+        # Debug info dikhane ke liye
+        st.write(f"API Response ({security_id}):", res_json)
+        
         if res_json.get("status") == "success":
             data = res_json.get("data", {})
             df = pd.DataFrame(data)
             if not df.empty and 'close' in df.columns:
                 return float(df['close'].iloc[-1])
     except Exception as e:
-        pass
+        st.error(f"Error: {e}")
     return None
 
 if st.button("🔄 Check Nifty & Sensex Live Price", type="primary"):
     if not client_id or not access_token:
         st.error("Secrets missing in Streamlit!")
     else:
-        with st.spinner("Fetching market data directly from Dhan API..."):
-            # Nifty (ID: 13)
+        with st.spinner("Fetching market data..."):
             nifty_price = fetch_index_price("13", client_id, access_token)
-            # Sensex (ID: 51)
             sensex_price = fetch_index_price("51", client_id, access_token)
             
             col1, col2 = st.columns(2)
@@ -58,7 +60,7 @@ if st.button("🔄 Check Nifty & Sensex Live Price", type="primary"):
                     st.metric(label="Nifty Price", value=nifty_price)
                     st.info(f"ATM: {nifty_atm} CE/PE")
                 else:
-                    st.error("Could not fetch Nifty data")
+                    st.warning("Market band hone ki wajah se data nahi mila.")
             
             with col2:
                 st.subheader("📊 Sensex Spot")
@@ -67,4 +69,4 @@ if st.button("🔄 Check Nifty & Sensex Live Price", type="primary"):
                     st.metric(label="Sensex Price", value=sensex_price)
                     st.info(f"ATM: {sensex_atm} CE/PE")
                 else:
-                    st.error("Could not fetch Sensex data")
+                    st.warning("Market band hone ki wajah se data nahi mila.")
